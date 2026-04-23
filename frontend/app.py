@@ -14,7 +14,7 @@ model = pickle.load(open(model_path, "rb"))
 columns = pickle.load(open(columns_path, "rb"))
 
 
-explainer = shap.Explainer(model)
+explainer = shap.TreeExplainer(model)
 
 
 label_map = {
@@ -25,7 +25,7 @@ label_map = {
 
 st.set_page_config(page_title="Greenlight Simulator", layout="wide")
 
-st.title("🎬 Greenlight Simulator")
+st.title(" Greenlight Simulator")
 st.write("AI-powered decision system for movie success prediction")
 
 
@@ -68,28 +68,42 @@ if st.button(" Predict"):
     st.progress(float(prob))
     st.write(f"Confidence: {prob:.2f}")
 
-    # -------------------------------
-    # FEATURE IMPORTANCE
-    # -------------------------------
-    st.subheader(" Feature Importance")
+    
+    st.subheader(" Feature Importance (Top 10)")
+
+    importances = model.feature_importances_
+    feat_imp = pd.Series(importances, index=columns)
+    top_feats = feat_imp.sort_values(ascending=False).head(10)
 
     fig, ax = plt.subplots()
-    ax.barh(columns, model.feature_importances_)
-    ax.set_title("Feature Importance")
+    top_feats.sort_values().plot(kind='barh', ax=ax)
+    ax.set_title("Top Features")
+
     st.pyplot(fig)
 
     
-    st.subheader("Why this prediction?")
+    st.subheader(" Why this prediction?")
 
-    shap_values = explainer(input_df)
+    shap_values = explainer.shap_values(input_df)
 
-    try:
-        fig, ax = plt.subplots()
-        shap.plots.waterfall(shap_values[0], show=False)
-        st.pyplot(fig)
-    except:
-        shap.plots.bar(shap_values[0], show=False)
-        st.pyplot(plt.gcf())
+    
+    if isinstance(shap_values, list):
+        shap_vals = shap_values[pred][0]
+    else:
+        shap_vals = shap_values[0]
+
+    shap_df = pd.DataFrame({
+        "Feature": columns,
+        "Impact": shap_vals
+    })
+
+    shap_df["abs_impact"] = shap_df["Impact"].abs()
+    shap_df = shap_df.sort_values(by="abs_impact", ascending=False).head(10)
+
+    fig, ax = plt.subplots()
+    ax.barh(shap_df["Feature"], shap_df["Impact"])
+    ax.set_title("Top Feature Impacts")
+    st.pyplot(fig)
 
     
     st.subheader(" ROI vs Budget Simulation")
